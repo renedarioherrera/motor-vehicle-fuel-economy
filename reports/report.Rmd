@@ -1,0 +1,257 @@
+---
+title: "Motor Vehicle Fuel Economy Report"
+author: "René Dario"
+date: "4/1/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE
+  )
+```
+
+```{r package-libraries}
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(knitr)
+```
+
+```{r setup-theme}
+my_theme <- theme_classic() +
+  theme(
+    aspect.ratio = 9/16
+  )
+```
+
+```{r import}
+truck <- read_csv("../data-raw/Truck.csv",
+                  skip = 1,
+                  col_names = c(
+                    "date_time",
+                    "odometer",
+                    "gallons",
+                    "x1",
+                    "x2",
+                    "cost_usd",
+                    "mpg"
+                  )) %>%
+  mutate(
+    vehicle = "2002 Chevrolet Silverado 1500"
+  )
+
+equinox <- read_csv("../data-raw/Rudolph.csv",
+                  skip = 1,
+                  col_names = c(
+                    "date_time",
+                    "odometer",
+                    "gallons",
+                    "x1",
+                    "x2",
+                    "cost_usd",
+                    "mpg"
+                  )) %>%
+  mutate(
+    vehicle = "2008 Chevrolet Equinox LT"
+  )
+```
+
+```{r tidy-transform}
+mv_data <- bind_rows(
+  truck,
+  equinox
+) %>%
+  filter(!is.na(mpg)) %>%
+  mutate(
+    date_time = parse_date_time(
+      x = date_time,
+      orders = "%m/%d/%Y %H:%M")
+  ) %>%
+  select(!starts_with("x")) %>%
+  group_by(vehicle) %>%
+  mutate(
+    miles = odometer - lag(odometer, default = odometer[1]),
+    miles_per_gallon = miles / gallons,
+    gallons_per_100miles = (gallons / miles)*100,
+    price_per_gallon = cost_usd/gallons,
+    price_per_100miles = price_per_gallon*gallons_per_100miles
+  ) %>%
+  ungroup() 
+```
+
+## Average Values 
+
+```{r average-values}
+mv_data %>%
+  filter(miles>0) %>%
+  group_by(vehicle) %>%
+  summarise(
+    miles_traveled = mean(miles),
+    miles_per_gallon = mean(miles_per_gallon),
+    gallons_per_100miles = mean(gallons_per_100miles),
+    price_per_gallon = mean(price_per_gallon),
+    price_per_100miles = mean(price_per_100miles)
+    ) %>%
+  kable(caption = "Average values")
+```
+
+## Minimum  Values 
+
+```{r min-values}
+mv_data %>%
+  filter(miles>0) %>%
+  group_by(vehicle) %>%
+  summarise(
+    miles_traveled = min(miles),
+    miles_per_gallon = min(miles_per_gallon),
+    gallons_per_100miles = min(gallons_per_100miles),
+    price_per_gallon = min(price_per_gallon),
+    price_per_100miles = min(price_per_100miles)
+    ) %>%
+  kable(caption = "Minimum values")
+```
+
+## Maximum Values 
+```{r max-values}
+mv_data %>%
+  filter(miles>0) %>%
+  group_by(vehicle) %>%
+  summarise(
+    miles_traveled = max(miles),
+    miles_per_gallon = max(miles_per_gallon),
+    gallons_per_100miles = max(gallons_per_100miles),
+    price_per_gallon = max(price_per_gallon),
+    price_per_100miles = max(price_per_100miles)
+    ) %>%
+  kable(caption = "Maximum values")
+```
+
+## Price per Gallon of Gasoline
+
+```{r price-per-gallon}
+mv_data %>%
+  filter(miles>0) %>%
+  ggplot() +
+  geom_line(mapping = aes(x = date_time, y = price_per_gallon)) +
+  geom_smooth(mapping = aes(x = date_time, y = price_per_gallon), method = lm) +
+  scale_y_continuous(
+    limits = (c(0,NA)),
+    labels = label_dollar()) +
+  my_theme
+```
+
+
+## Distance Traveled Between Fuel (Equinox)
+
+```{r distance-traveled-for-fuel}
+mv_data %>%
+  filter(vehicle == "2008 Chevrolet Equinox LT") %>%
+  filter(miles>0) %>%
+  ggplot() +
+  geom_line(mapping = aes(x = date_time, y = miles)) +
+  geom_smooth(mapping = aes(x = date_time, y = miles), method = lm) +
+  scale_y_continuous(
+    limits = (c(0,NA))) +
+  labs(x = "Date",
+       y = "Distance Traveled in Miles") +
+  my_theme
+```
+
+## Fuel Economy: Miles per Gallon (Equinox)
+
+```{r miles-per-gallon}
+mv_data %>%
+  filter(vehicle == "2008 Chevrolet Equinox LT") %>%
+  filter(miles>0) %>%
+  ggplot() +
+  geom_line(mapping = aes(x = date_time, y = miles_per_gallon)) +
+  geom_smooth(mapping = aes(x = date_time, y = miles_per_gallon), method = lm) +
+  scale_y_continuous(
+    limits = (c(0,NA))) +
+  labs(x = "Date",
+       y = "Miles per Gallon") +
+  my_theme
+```
+
+## Fuel Economy: Gallons per 100 Miles (Equinox)
+
+```{r gal-per-mile}
+mv_data %>%
+  filter(vehicle == "2008 Chevrolet Equinox LT") %>%
+  filter(miles>0) %>%
+  ggplot() +
+  geom_line(mapping = aes(x = date_time, y = gallons_per_100miles)) +
+  geom_smooth(mapping = aes(x = date_time, y = gallons_per_100miles), method = lm) +
+  scale_y_continuous(
+    limits = (c(0,NA))) +
+  labs(x = "Date",
+       y = "Gallons Consumed per 100 Miles") +
+  my_theme
+```
+
+## Fuel Economy: Cost per 100 Miles  (Equinox)
+
+```{r cost-per-mile}
+mv_data %>%
+  filter(vehicle == "2008 Chevrolet Equinox LT") %>%
+  filter(miles>0) %>%
+  ggplot() +
+  geom_line(mapping = aes(x = date_time, y = price_per_100miles)) +
+  geom_smooth(mapping = aes(x = date_time, y = price_per_100miles), method = lm) +
+  scale_y_continuous(
+    limits = (c(0,NA)),
+    labels = label_dollar()) +
+  labs(x = "Date",
+       y = "Cost per 100 Miles Traveled (USD)") +
+  my_theme
+```
+
+## Average Miles Traveled Each Year (Equinox)
+
+```{r}miles_per_year <- mv_data %>%
+  filter(vehicle == "2008 Chevrolet Equinox LT") %>%
+  filter(miles>0) %>%
+  mutate(year = year(date_time)) %>%
+  group_by(year) %>%
+  summarise(miles_per_year = sum(miles)) %>%
+  ungroup() %>%
+  summarise(mean(miles_per_year)) %>%
+  as.numeric()
+```
+
+## Total Miles Traveled per Year (Equinox)
+
+```{r}
+mv_data %>%
+  filter(vehicle == "2008 Chevrolet Equinox LT") %>%
+  filter(miles>0) %>%
+  mutate(year = year(date_time)) %>%
+  group_by(year) %>%
+  summarise(miles_per_year = sum(miles)) %>%
+  ggplot() +
+  geom_col(mapping = aes(x = year, y = miles_per_year)) +
+  scale_y_continuous(limits = c(0,NA)) +
+  labs(x = "Year", y = "Miles Traveled") +
+  my_theme
+```
+
+
+## Total Cost of Fuel Each Year (Equinox)
+
+```{r}
+mv_data %>%
+  filter(vehicle == "2008 Chevrolet Equinox LT") %>%
+  filter(miles>0) %>%
+  mutate(year = year(date_time)) %>%
+  group_by(year) %>%
+  summarise(cost = sum(cost_usd)) %>%
+  ggplot() +
+  geom_col(mapping = aes(x = year, y = cost)) +
+  scale_y_continuous(limits = c(0,NA),
+                     labels = label_dollar()) +
+  labs(x = "Year", y = "Fuel Expenses (USD)") +
+  my_theme
+```
